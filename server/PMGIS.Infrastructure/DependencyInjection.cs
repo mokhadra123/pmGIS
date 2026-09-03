@@ -1,6 +1,9 @@
 using Microsoft.Extensions.Hosting;
 
+using Microsoft.Extensions.DependencyInjection;
+
 using PMGIS.Infrastructure.Data;
+using PMGIS.Infrastructure.Seeding;
 
 namespace PMGIS.Infrastructure;
 
@@ -11,6 +14,8 @@ public static class DependencyInjection
     public static IHostApplicationBuilder AddInfrastructure(this IHostApplicationBuilder builder)
     {
         builder.AddNpgsqlDbContext<PmgisDbContext>(DatabaseResourceName);
+
+        builder.Services.AddScoped<DataSeeder>();
 
         return builder;
     }
