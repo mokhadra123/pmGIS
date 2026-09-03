@@ -5,12 +5,12 @@ namespace PMGIS.Api.Features.Lookups.GetProjectStatuses;
 public static class GetProjectStatusesEndpoint
 {
     public static void Map(IEndpointRouteBuilder app) =>
-        app.MapGet("/api/lookups/project-statuses", HandleAsync)
+        app.MapGet("/api/lookups/project-statuses", Handle)
             .WithName("GetProjectStatuses")
             .WithTags("Lookups")
             .WithSummary("ProjectStatus coded-value domain.")
             .Produces<IReadOnlyList<LookupItem>>();
 
-    private static IResult HandleAsync(GetProjectStatusesQueryHandler handler) =>
+    private static IResult Handle(GetProjectStatusesQueryHandler handler) =>
         Results.Ok(handler.Handle(new GetProjectStatusesQuery()));
 }
