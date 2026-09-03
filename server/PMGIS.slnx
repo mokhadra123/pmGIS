@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="PMGIS.Api/PMGIS.Api.csproj" />
   <Project Path="PMGIS.AppHost/PMGIS.AppHost.csproj" />
   <Project Path="PMGIS.Domain/PMGIS.Domain.csproj" />
   <Project Path="PMGIS.Infrastructure/PMGIS.Infrastructure.csproj" />
