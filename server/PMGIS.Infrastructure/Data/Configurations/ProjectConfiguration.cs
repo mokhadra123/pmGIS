@@ -31,10 +31,6 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.HasIndex(p => p.StartDate);
         builder.HasIndex(p => p.EndDate);
         builder.HasIndex(p => new { p.Latitude, p.Longitude });
-
-        // The list's default ordering. Composite with Id because paging needs a stable
-        // tie-break, so the query sorts by both and the index can be walked in order
-        // rather than the rows being sorted on every page load.
         builder.HasIndex(p => new { p.LastModifiedOn, p.Id });
 
         builder.HasOne(p => p.ProjectType)
