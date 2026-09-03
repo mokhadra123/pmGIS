@@ -1,5 +1,6 @@
 using PMGIS.Api.Features.Lookups;
 using PMGIS.Infrastructure;
+using PMGIS.Infrastructure.Seeding;
 
 using Scalar.AspNetCore;
 
@@ -24,6 +25,10 @@ if (app.Environment.IsDevelopment())
         .WithTitle("PMGIS API")
         .WithTheme(ScalarTheme.BluePlanet)
         .WithDefaultHttpClient(ScalarTarget.JavaScript, ScalarClient.Fetch));
+
+    // Development only and idempotent: it exits immediately if projects already exist.
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<DataSeeder>().SeedAsync();
 }
 
 app.Run();
