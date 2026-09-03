@@ -238,6 +238,94 @@ than the compiler. That is accepted because the alternative is a dependency carr
 to express three predicates, and the SQL involved is short and confined to the single
 data-access class.
 
+### Enums are stored as strings, not integers
+
+**Brief says:** Nothing about storage representation.
+
+**Decision:** `ProjectStatus` and `ActivityStatus` are persisted as their member names
+(`'InProgress'`), in a bounded character column, rather than as their underlying integers.
+
+**Reasoning:** An integer column silently changes meaning if a member is ever inserted
+into the middle of an enum — every existing row then refers to a different status, with no
+error and no migration to catch it. Names are immune to reordering. They also make the
+stored data readable directly in the database, which matters when diagnosing a data
+problem against 5,000 seeded rows.
+
+**Trade-off:** A few bytes per row instead of four, and slightly larger indexes on the
+status columns. At this data volume that cost is not measurable, and correctness under
+future edits is worth more than the space.
+
+### Delete behaviour
+
+**Brief says:** _"Delete must be transactional: remove the point from the Project Feature
+Layer, cascade-delete the project's activities and delete the project row."_ It says
+nothing about deleting a user or a project type.
+
+**Decision:**
+
+- **Project → Activities: cascade.** Deleting a project deletes its activities in the same
+  database transaction, as the brief requires.
+- **Project → ProjectType, Owner, CreatedBy, LastModifiedBy: restrict.**
+- **Activity → AssignedTo, DeletedBy: restrict.**
+
+**Reasoning:** Cascade is correct in exactly one direction here: an activity has no
+meaning without its parent project, so the two share a lifetime.
+
+Nothing else does. Cascading from a user would mean deleting a person's account silently
+destroys every project they created — catastrophic and irreversible. `SetNull` was
+rejected too, because the audit fields exist precisely so that _"Last Modified By"_ and
+the user retained on a soft-deleted activity remain answerable; nulling them would erase
+the audit trail the brief asks to keep. Restricting means a user or project type that is
+still referenced cannot be deleted at all, which is the honest outcome: retirement is what
+the `IsActive` flags are for.
+
+### Index strategy for the Projects List
+
+**Brief says:** _"Every column sortable ascending and descending, with the sort applied on
+the server"_ and _"the list stays responsive with at least 5,000 project records."_
+
+**Decision:** Columns that the list filters or sorts by are indexed individually: name,
+status, both dates and duration. The coordinate pair and the default ordering are
+composite indexes. Project code and ObjectId carry unique indexes. Activities carry a
+composite index on project and soft-delete flag. Foreign keys are left to Entity
+Framework's convention, which indexes them automatically.
+
+**Reasoning:** Indexes are not free — each one is updated on every insert and update — so
+they are placed only where the brief creates a read pattern.
+
+Two are composite for specific reasons. The coordinate pair is one index rather than two,
+because the map-extent filter always constrains longitude and latitude together. The
+default ordering is indexed as `(LastModifiedOn, Id)` rather than on the timestamp alone:
+server-side paging needs a deterministic tie-break or rows can repeat or vanish between
+pages, so the query orders by both columns, and an index matching that order can be walked
+directly instead of the result set being sorted on every page load. This is the list's
+resting state — the query that runs before the user has done anything — so it is the one
+most worth serving from an index.
+
+**Known limits.** Two sortable columns cannot be served by an index on `Projects`:
+
+- **Number of Activities** is a filtered aggregate over the activities table. The composite
+  index on `(ProjectId, IsDeleted)` is what keeps that count cheap; there is nothing on
+  the project row to index.
+- **Project Type** is sorted by the type's display name, which lives in another table, so
+  the sort is resolved through a join rather than the foreign-key index.
+
+Both are accepted. Neither is on the default path, and the volume the brief specifies does
+not justify denormalising a name or maintaining a counter column.
+
+### `ObjectId` carries a filtered unique index
+
+**Decision:** The unique index on `ObjectId` is declared with a filter excluding null rows.
+
+**Reasoning:** Uniqueness is the point: one feature in the layer may back at most one
+project row, which makes half of the reconciliation requirement structurally impossible to
+violate rather than merely checked after the fact.
+
+PostgreSQL already treats nulls as distinct in a unique index, so the filter is not what
+permits many projects to have no location — that would work regardless. The filter is
+there so the index does not carry an entry for every location-less row. Early in the
+database's life most rows have no ObjectId, so the saving is the majority of the table.
+
 ### The PostGIS extension is declared in the model
 
 **Decision:** The DbContext declares `postgis` as a required extension rather than
