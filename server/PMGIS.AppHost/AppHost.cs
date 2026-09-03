@@ -10,4 +10,9 @@ var postgres = builder.AddPostgres("postgres", password: postgresPassword, port:
 
 var database = postgres.AddDatabase("pmgisdb");
 
+var api = builder.AddProject<Projects.PMGIS_Api>("api")
+    .WithReference(database)
+    .WaitFor(database)
+    .WithExternalHttpEndpoints();
+
 builder.Build().Run();

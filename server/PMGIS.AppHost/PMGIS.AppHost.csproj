@@ -13,4 +13,8 @@
     <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.5.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\PMGIS.Api\PMGIS.Api.csproj" />
+  </ItemGroup>
+
 </Project>
