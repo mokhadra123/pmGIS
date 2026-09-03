@@ -3,7 +3,7 @@ namespace PMGIS.Domain.Entities;
 public class ProjectType
 {
   public int Id { get; set; }
-  public required string ProjectTypeCode { get; set; }
+  public required string Code { get; set; }
   public required string Name { get; set; }
   public int SortOrder { get; set; }
 
