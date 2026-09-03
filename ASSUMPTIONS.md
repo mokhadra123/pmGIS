@@ -4,7 +4,8 @@ Decisions taken where the brief is silent, ambiguous, or leaves a genuine choice
 Each entry records what the brief says, what was decided, and why — so a reviewer can
 tell a considered choice from an oversight.
 
-This file grows as the project does. It currently covers the domain layer only.
+This file grows as the project does. It currently covers the domain and data-access
+layers.
 
 _Last updated: 2026-09-03_
 
@@ -188,6 +189,64 @@ required. Project Type, Owner, Budget, Description and both dates carry no aster
 **Reasoning:** Nullability of the foreign key is what makes a relationship optional, so a
 non-nullable key would contradict the form and would produce a `NOT NULL` column that
 rejects the very projects the brief allows.
+
+---
+
+## Data access
+
+### Persistence is configured with the Fluent API, not data annotations
+
+**Brief says:** Nothing. It requires _"a single data-access layer, no duplicated query
+logic"_ but does not prescribe how the mapping is expressed.
+
+**Decision:** All Entity Framework configuration — column types and lengths, indexes,
+keys, delete behaviour — lives in `IEntityTypeConfiguration` classes inside
+`PMGIS.Infrastructure`. No EF attributes appear on the entities.
+
+**Reasoning:** Data annotations would put `Microsoft.EntityFrameworkCore` and
+`System.ComponentModel.DataAnnotations` types on the domain entities, which would make
+`PMGIS.Domain` depend on the persistence technology. The domain project deliberately has
+no package or project references at all, so that business rules can be reasoned about and
+tested without a database. The Fluent API keeps every storage concern on the
+infrastructure side of that line.
+
+It is also the more capable of the two. Stored computed columns, filtered indexes and
+composite indexes have no annotation equivalent, and all three are needed to satisfy the
+Projects List requirements.
+
+### NetTopologySuite is not referenced
+
+**Brief says:** Nothing about how spatial data should be represented in .NET. It requires
+a drawn-polygon filter, a map-extent filter and a _"projects within a user-specified
+distance of a clicked point, ordered by distance"_ query.
+
+**Decision:** The `Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite` package is not
+installed. Coordinates are stored as two `double` columns, and the spatial predicates are
+expressed as parameterised PostGIS SQL that builds geometry from those columns at query
+time.
+
+**Reasoning:** NetTopologySuite exists to map PostGIS geometry columns onto .NET geometry
+types so they can be queried through LINQ. No entity in this model has a geometry column —
+the feature layer is the authoritative store for geometry, and the database holds a plain
+numeric mirror of it. `ST_Contains`, `ST_DWithin` and `ST_Distance` all operate on
+geometry constructed inside the query and return scalars, so nothing needs to be
+materialised into a .NET geometry object.
+
+**Trade-off:** Spatial predicates are written as SQL rather than LINQ, so they are not
+composable in the same way as the rest of the query and are checked by the database rather
+than the compiler. That is accepted because the alternative is a dependency carried solely
+to express three predicates, and the SQL involved is short and confined to the single
+data-access class.
+
+### The PostGIS extension is declared in the model
+
+**Decision:** The DbContext declares `postgis` as a required extension rather than
+assuming a database that already has it enabled.
+
+**Reasoning:** Declaring it in the model means the generated migration emits the statement
+that installs it, so a fresh database is provisioned entirely by running migrations. The
+alternative would be a manual step in the setup instructions that is easy to omit and
+fails at query time rather than at deployment time.
 
 ---
 
