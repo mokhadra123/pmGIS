@@ -1,5 +1,6 @@
 using PMGIS.Api.Features.Lookups.GetProjectStatuses;
 using PMGIS.Api.Features.Lookups.GetProjectTypes;
+using PMGIS.Api.Features.Lookups.GetUsers;
 
 namespace PMGIS.Api.Features.Lookups;
 
@@ -9,6 +10,7 @@ public static class LookupsFeature
     {
         services.AddScoped<GetProjectStatusesQueryHandler>();
         services.AddScoped<GetProjectTypesQueryHandler>();
+        services.AddScoped<GetUsersQueryHandler>();
 
         return services;
     }
@@ -17,6 +19,7 @@ public static class LookupsFeature
     {
         GetProjectStatusesEndpoint.Map(app);
         GetProjectTypesEndpoint.Map(app);
+        GetUsersEndpoint.Map(app);
 
         return app;
     }
