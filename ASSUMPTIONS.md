@@ -535,6 +535,21 @@ same shape, so a change to one is an obvious prompt to change the other.
 regular expression — and the server remains the enforcement point, so drift degrades the
 immediacy of feedback rather than data integrity.
 
+### Lookups are cached per session, but failures are not
+
+**Decision:** Each lookup endpoint is fetched once and replayed to later subscribers. A
+request that fails is removed from the cache so the next caller retries.
+
+**Reasoning:** Coded-value domains change rarely and three parts of the UI need them at
+once — the filter panel, the project form and the activities table — so refetching per
+consumer would be wasteful.
+
+Caching the observable alone would also cache an error: a replayed stream hands every
+later subscriber whatever the source emitted, including a failure, and never resubscribes.
+One blip while the API was still starting would leave the type and user pickers empty for
+the rest of the session with no way to recover short of a reload. Evicting on failure
+keeps the cache useful without making it a trap.
+
 ### Transport models are hand-written, not generated
 
 **Decision:** The TypeScript interfaces under `core/models` are written by hand to match the
