@@ -4,10 +4,10 @@ Decisions taken where the brief is silent, ambiguous, or leaves a genuine choice
 Each entry records what the brief says, what was decided, and why — so a reviewer can
 tell a considered choice from an oversight.
 
-This file grows as the project does. It currently covers the domain and data-access
-layers.
+This file grows as the project does. It currently covers the domain, data-access, API and
+feature-layer work.
 
-_Last updated: 2026-09-03_
+_Last updated: 2026-09-04_
 
 ---
 
@@ -338,16 +338,186 @@ fails at query time rather than at deployment time.
 
 ---
 
-## Out of scope so far
+## API structure
+
+### Vertical slices with explicit registration
+
+**Brief says:** _"Separation of concerns, reusable components, a single data-access layer,
+no duplicated query logic."_ It does not prescribe a project structure.
+
+**Decision:** Each operation owns a folder containing its endpoint, its input type, its
+handler and its validator. Handlers and routes are listed by hand in a feature module
+(`ProjectsFeature`, `LookupsFeature`, `GisFeature`) rather than discovered by assembly
+scanning.
+
+**Reasoning:** Grouping by technical role — all endpoints together, all handlers together —
+spreads one feature across four folders, so changing it means editing four places and
+deleting it means hunting. A slice is added, changed or removed as a unit.
+
+Registration is explicit because the failure mode of scanning is silence: a slice that is
+never registered still compiles, and its route simply does not exist. Listing them makes
+that omission visible in a file a person reads.
+
+**Trade-off:** Adding a slice means remembering to edit its module. That is a compile-time
+visible chore, which was preferred to a runtime-invisible one. Note the opposite call was
+made for EF entity configurations, which _are_ scanned: mapping is uniform and a missing
+configuration fails loudly at model build, so the risk is not comparable.
+
+### Validation runs as an endpoint filter
+
+**Brief says:** validation rules must be enforced _"on both the client and the server"_,
+with _"field-level error messages"_ and a summary that _"lists every offending row rather
+than only the first."_
+
+**Decision:** A generic endpoint filter resolves the FluentValidation validator for the
+request type, runs it before the handler, and returns an RFC 7807 `ValidationProblem` with
+one entry per field. Failures are grouped by property name so every offending field is
+reported, not the first.
+
+**Reasoning:** Putting this in a filter keeps guard clauses out of handlers and makes the
+response shape identical everywhere. The RFC 7807 `errors` dictionary is keyed by field
+name — including indexer syntax for collections, e.g. `Activities[2].EndDate` — which is
+what lets the browser place each message next to the input that caused it rather than
+showing one generic toast.
+
+**Limit:** Rules that depend on stored state cannot run there. Project code uniqueness and
+the activity status state machine are checked inside the handlers, because a request
+validator cannot see the database or the row's previous status.
+
+### Create and update use separate validators
+
+**Decision:** `CreateProjectCommandValidator` and `UpdateProjectCommandValidator` are
+separate types with, today, identical rules.
+
+**Reasoning:** They are separate concepts that happen to coincide. Sharing one validator
+would mean any future edit-only rule has to be reasoned about in terms of what it does to
+creation. The duplication is a handful of lines and is the cheaper of the two costs.
+
+### Bulk delete is a loop over the single delete
+
+**Brief says:** _"a single bulk delete action over the selected projects"_, and separately
+that a delete must be transactional across the feature, the activities and the row.
+
+**Decision:** The bulk slice calls the single-delete handler once per project and returns
+per-project outcomes. It is not one transaction spanning every selected project.
+
+**Reasoning:** Each project's delete already spans two systems that cannot share a
+transaction. Wrapping several of those in an outer transaction would not make the set
+atomic — a feature-layer deletion cannot be rolled back by the database — so the guarantee
+would be illusory. Per-project atomicity is real and is what the brief actually requires;
+reporting each outcome lets the UI restore exactly the rows that survived.
+
+### The acting user is a constant
+
+**Brief says:** nothing about authentication, but requires Last Modified By, and the user
+retained on a soft-deleted activity.
+
+**Decision:** `CurrentUser.Id` is a constant pointing at a seeded user. Audit fields are
+written from it.
+
+**Reasoning:** Authentication is not in the brief and building it would be scope the
+assessment did not ask for. The audit fields are real and populated, so replacing this one
+constant with a claim from a signed-in principal is the entire change required later. It
+is isolated in a single named type rather than scattered as a literal.
+
+---
+
+## Feature layer
+
+### The two stores are ordered, not transacted
+
+**Brief says:** _"create the feature first, then write the project row with the returned
+ObjectId. If the database write fails, delete the newly created feature."_ Delete must
+leave _"no orphan features or orphan activity rows."_
+
+**Decision:** The ordering is deliberately asymmetric.
+
+- **Create:** the feature is written first, because the row needs the ObjectId the service
+  assigns. If the database write then fails, the new feature is deleted as a compensating
+  action.
+- **Update and delete:** the database transaction is opened first and the feature is
+  written before committing, so a feature failure rolls the database back for free.
+
+**Reasoning:** No transaction can span ArcGIS and PostgreSQL, so consistency has to come
+from ordering plus compensation. Create has no choice — the ObjectId does not exist until
+the feature does. Update and delete do have a choice, and putting the fallible remote call
+inside an open transaction converts a two-phase problem into a one-phase one.
+
+**Residual risk:** if the compensating delete _also_ fails, an orphan feature remains. That
+case is logged at critical and is exactly what the reconciliation report exists to surface.
+
+### SOURCEID namespaces this application's features
+
+**Brief says:** nothing. The supplied layer is a shared public sample that other people
+also write to.
+
+**Decision:** Every feature this application creates carries `SOURCEID = 900000 + project
+Id`. Reads apply a definition expression of `SOURCEID >= 900000`, and the reconciliation
+report is scoped the same way.
+
+**Reasoning:** Without a scope, every feature written by any other consumer of the shared
+layer would be reported as an orphan, making the reconciliation check useless. Deriving the
+value from the project Id makes it stable and collision-free within our range, and means
+the single-create path and the bulk backfill compute the same value for the same project —
+which is what lets an interrupted backfill adopt the feature it already created instead of
+duplicating it.
+
+### The layer is used anonymously
+
+**Decision:** No ArcGIS credentials are configured. The token provider returns null and no
+token is sent.
+
+**Reasoning:** The layer named in the brief accepts anonymous edits. Username and password
+are bound from configuration, so republishing the layer into an account that requires a
+token is a settings change rather than a code change. The 498/499 refresh-and-retry-once
+path is implemented regardless, because it is required and cannot be added meaningfully
+after the fact.
+
+### Bulk backfill does not roll back a batch
+
+**Decision:** Single edits use `rollbackOnFailure=true`. The bulk backfill uses `false`,
+and writes back only the ObjectIds whose per-feature result reported success.
+
+**Reasoning:** A backfill of thousands of rows should not discard an entire batch because
+one geometry was rejected. Rows that fail keep no ObjectId, so they remain candidates and
+the next run retries them. Idempotency comes from the candidate filter itself plus adoption
+by SOURCEID, so a re-run cannot double up points in a shared public layer.
+
+### Seeded projects have no features
+
+**Decision:** The seeder leaves `ObjectId` null on all 5,000 rows.
+
+**Reasoning:** Seeding is local and repeatable; writing 5,000 points into a shared public
+ArcGIS layer on every fresh database is not. The backfill slice exists to create them
+deliberately, in controlled batches, when wanted.
+
+---
+
+## Conventions
+
+### Comments are single-line; reasoning lives here
+
+**Decision:** Source files carry short `//` comments stating what a piece of code does. XML
+documentation blocks are not used.
+
+**Reasoning:** The design reasoning is recorded in this file and in commit messages, which
+is where a reviewer looks for it, and keeps it in one place rather than restated across
+files where copies drift apart. Comments in code answer "what is this", not "why was it
+built this way".
+
+---
+
+## Out of scope
 
 Recorded here so their absence reads as a decision rather than an omission.
 
-- **Authentication.** The brief describes no sign-in and no roles, but requires audit
-  fields (Last Modified By, and the user retained on a soft-deleted activity). Those
-  fields exist on the entities; how the acting user is supplied is deferred to the API
-  layer.
+- **Authentication.** No sign-in or roles, as the brief describes none. See _The acting
+  user is a constant_ above for how audit fields are populated in the meantime.
+- **Automated tests.** The brief lists no testing requirement and the rubric has no line
+  for it. Behaviour was verified by exercising the endpoints against the seeded database.
 - **The allowed project boundary.** The brief requires a placed point to be validated
-  against an allowed boundary but never defines one. To be decided when location handling
-  is implemented.
-- **Layer attribute schema.** Required as a deliverable. To be documented once the feature
-  layer integration is built.
+  against an allowed boundary but never defines one, and the API exposes no boundary
+  resource. It is therefore client configuration rather than data; to be settled when the
+  location picker is built.
+- **Layer attribute schema.** Required as a deliverable. To be documented alongside the
+  client work, once the fields actually written to the layer are settled.
