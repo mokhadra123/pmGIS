@@ -10,20 +10,17 @@ using PMGIS.Infrastructure.Data;
 
 namespace PMGIS.Infrastructure.Seeding;
 
-/// <summary>
-/// Creates the lookup data and the 5,000 projects the acceptance criteria call for.
-/// Runs once: if any project exists, it does nothing.
-/// </summary>
+// Creates the lookup data and the 5,000 projects the acceptance criteria call for.
 public sealed class DataSeeder(PmgisDbContext db, ILogger<DataSeeder> logger)
 {
     public const int ProjectCount = 5_000;
 
     private const int UserCount = 25;
 
-    /// <summary>Rows held in the change tracker at once. Keeps memory flat at any volume.</summary>
+    // Rows held in the change tracker at once.
     private const int BatchSize = 500;
 
-    /// <summary>Fixed so a reviewer running the seed twice gets identical data.</summary>
+    // Fixed so a reviewer running the seed twice gets identical data.
     private const int RandomSeed = 20260904;
 
     private static readonly (string Code, string Name)[] Types =
@@ -37,7 +34,7 @@ public sealed class DataSeeder(PmgisDbContext db, ILogger<DataSeeder> logger)
         ("TELECOM", "Telecommunications"),
     ];
 
-    /// <summary>Cairo, Giza, Alexandria, Aswan, Luxor, Port Said, Suez, Hurghada.</summary>
+    // Cairo, Giza, Alexandria, Aswan, Luxor, Port Said, Suez, Hurghada.
     private static readonly (double Lon, double Lat)[] Anchors =
     [
         (31.2357, 30.0444), (31.1342, 29.9792), (29.9187, 31.2001), (32.8998, 24.0889),

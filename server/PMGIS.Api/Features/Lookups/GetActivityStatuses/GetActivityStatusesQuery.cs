@@ -1,4 +1,4 @@
 namespace PMGIS.Api.Features.Lookups.GetActivityStatuses;
 
-/// <summary>Takes no input; the domain is the enum itself.</summary>
+// Takes no input; the domain is the enum itself.
 public sealed record GetActivityStatusesQuery;
