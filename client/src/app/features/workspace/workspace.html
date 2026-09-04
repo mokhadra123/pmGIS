@@ -1,0 +1,15 @@
+<div class="workspace" [class.panel-open]="panelOpen()">
+  <aside class="list-pane">
+    <app-project-list />
+  </aside>
+
+  <main class="map-pane">
+    <app-project-map />
+  </main>
+
+  @if (panelOpen()) {
+    <aside class="detail-pane">
+      <router-outlet />
+    </aside>
+  }
+</div>

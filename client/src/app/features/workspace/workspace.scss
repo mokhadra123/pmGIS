@@ -1,0 +1,51 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.workspace {
+  display: grid;
+  /* The list pane takes a share of the width rather than a fixed cap, so the table's
+     column-priority tiers can actually be reached on a large display. Bounded at both
+     ends: never so narrow the table is unreadable, never so wide it starves the map. */
+  grid-template-columns: clamp(22rem, 32%, 46rem) 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+.workspace.panel-open {
+  grid-template-columns: clamp(20rem, 24%, 34rem) 1fr minmax(24rem, 32rem);
+}
+
+.list-pane,
+.map-pane,
+.detail-pane {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.detail-pane {
+  border-left: 1px solid var(--border);
+  box-shadow: -6px 0 18px rgb(15 23 42 / 6%);
+  overflow: hidden;
+}
+
+/* Below this width three columns stop being readable, so the detail panel floats
+   over the map instead of squeezing it. */
+@media (max-width: 1200px) {
+  .workspace,
+  .workspace.panel-open {
+    grid-template-columns: minmax(18rem, 24rem) 1fr;
+  }
+
+  .detail-pane {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(32rem, 100vw);
+    z-index: 500;
+    background: var(--surface);
+  }
+}
