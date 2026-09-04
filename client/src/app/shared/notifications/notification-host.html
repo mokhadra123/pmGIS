@@ -1,0 +1,22 @@
+<div class="stack" role="status" aria-live="polite">
+  @for (notice of notifications.notices(); track notice.id) {
+    <div class="notice" [class]="notice.kind">
+      <span class="message">{{ notice.message }}</span>
+
+      @if (notice.retry) {
+        <button type="button" class="retry" (click)="run(notice)">
+          {{ notice.retryLabel }}
+        </button>
+      }
+
+      <button
+        type="button"
+        class="close"
+        aria-label="Dismiss"
+        (click)="notifications.dismiss(notice.id)"
+      >
+        &times;
+      </button>
+    </div>
+  }
+</div>
