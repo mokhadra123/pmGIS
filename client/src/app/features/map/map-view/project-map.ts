@@ -29,6 +29,7 @@ import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import Point from '@arcgis/core/geometry/Point';
 import LayerSearchSource from '@arcgis/core/widgets/Search/LayerSearchSource';
+import Popup from '@arcgis/core/widgets/Popup';
 import * as webMercatorUtils from '@arcgis/core/geometry/support/webMercatorUtils';
 import type MapView from '@arcgis/core/views/MapView';
 import type Extent from '@arcgis/core/geometry/Extent';
@@ -227,6 +228,11 @@ export class ProjectMap {
 
     const view = element.view;
     this.view = view;
+
+    // The view only builds its Popup lazily, on the first click, and that click is
+    // consumed while the widget module loads, so the first click never opens anything.
+    // Creating the Popup here means every click opens a popup.
+    view.popup = new Popup();
 
     this.restoreFromUrl(view);
     this.publishExtent(view);
