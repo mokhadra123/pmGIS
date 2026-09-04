@@ -1,0 +1,118 @@
+<header class="panel-head">
+  <h2>Project Details</h2>
+  <button type="button" class="close" aria-label="Close" (click)="close()">&times;</button>
+</header>
+
+@if (loading()) {
+  <p class="state">Loading project…</p>
+} @else if (failure(); as message) {
+  <div class="state error" role="alert">
+    <p>{{ message }}</p>
+    <button type="button" class="ghost" (click)="close()">Back to list</button>
+  </div>
+} @else if (project(); as p) {
+  <div class="scroll">
+    <div class="title">
+      <h3>{{ p.name }}</h3>
+      <code>{{ p.projectCode }}</code>
+    </div>
+
+    <div class="progress-block">
+      <div class="progress-label">
+        <span>Progress</span>
+        <strong>{{ progressPercent() }}%</strong>
+      </div>
+      <div
+        class="bar"
+        role="progressbar"
+        [attr.aria-valuenow]="progressPercent()"
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <span [style.width.%]="progressPercent()"></span>
+      </div>
+      <p class="hint">
+        Average % complete across activities, weighted by each activity's duration.
+      </p>
+    </div>
+
+    @if (p.description) {
+      <p class="description">{{ p.description }}</p>
+    }
+
+    <dl class="facts">
+      <div><dt>Type</dt><dd>{{ p.projectTypeName ?? '—' }}</dd></div>
+      <div><dt>Status</dt><dd>{{ statusName(p.status) }}</dd></div>
+      <div><dt>Start Date</dt><dd>{{ p.startDate ?? '—' }}</dd></div>
+      <div><dt>End Date</dt><dd>{{ p.endDate ?? '—' }}</dd></div>
+      <div><dt>Duration</dt><dd>{{ p.durationDays !== null ? p.durationDays + ' days' : '—' }}</dd></div>
+      <div><dt>Budget</dt><dd>{{ p.budget !== null ? (p.budget | currency: 'USD') : '—' }}</dd></div>
+      <div><dt>Owner</dt><dd>{{ p.ownerName ?? '—' }}</dd></div>
+      <div><dt>ObjectId</dt><dd>{{ p.objectId ?? 'No stored location' }}</dd></div>
+      <div>
+        <dt>Location</dt>
+        <dd>
+          @if (p.latitude !== null && p.longitude !== null) {
+            {{ p.latitude | number: '1.5-5' }}, {{ p.longitude | number: '1.5-5' }}
+          } @else {
+            —
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>Last Modified</dt>
+        <dd>
+          {{ p.lastModifiedByName ?? 'Unknown' }} ·
+          {{ p.lastModifiedOn | date: 'yyyy-MM-dd HH:mm' }}
+        </dd>
+      </div>
+    </dl>
+
+    <section class="activities">
+      <h4>Activities ({{ p.activities.length }})</h4>
+
+      @if (p.activities.length === 0) {
+        <p class="empty">No activities on this project.</p>
+      } @else {
+        <table>
+          <thead>
+            <tr>
+              <th>Activity</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Status</th>
+              <th>Assigned To</th>
+              <th class="num">%</th>
+              <th class="num">Days</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (activity of p.activities; track activity.id) {
+              <tr>
+                <td>{{ activity.name }}</td>
+                <td>{{ activity.startDate }}</td>
+                <td>{{ activity.endDate }}</td>
+                <td>{{ activityStatusName(activity.status) }}</td>
+                <td>{{ activity.assignedToName ?? '—' }}</td>
+                <td class="num">{{ activity.percentComplete }}</td>
+                <td class="num">{{ activity.durationDays }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  </div>
+
+  <footer class="panel-foot">
+    <button
+      type="button"
+      class="ghost"
+      [disabled]="p.latitude === null || p.longitude === null"
+      (click)="zoomTo()"
+    >
+      Zoom to Project
+    </button>
+    <button type="button" class="primary" (click)="edit()">Edit</button>
+  </footer>
+}
