@@ -1,0 +1,72 @@
+<arcgis-map
+  #mapElement
+  class="map"
+  [map]="map"
+  [center]="center"
+  [zoom]="zoom"
+  (pointerdown)="onPointerDown($any($event))"
+  (pointermove)="onPointerMove($any($event))"
+  (pointerup)="onPointerUp()"
+  (pointerleave)="onPointerUp()">
+
+  <arcgis-zoom slot="top-left" label="Zoom in / out"/>
+  <arcgis-home slot="top-left" label="Default Extent"/>
+
+  <arcgis-expand
+    slot="top-left"
+    group="map-panel"
+    expand-tooltip="Layers"
+    collapse-tooltip="Close Layers"
+  >
+    <arcgis-layer-list />
+  </arcgis-expand>
+
+  <arcgis-expand
+    slot="top-left"
+    group="map-panel"
+    expand-tooltip="Legend"
+    collapse-tooltip="Close Legend"
+  >
+    <arcgis-legend />
+  </arcgis-expand>
+
+  <arcgis-expand
+    slot="top-left"
+    group="map-panel"
+    expand-tooltip="Basemap"
+    collapse-tooltip="Close Basemap"
+  >
+    <arcgis-basemap-gallery />
+  </arcgis-expand>
+
+  <!--
+    Spatial filter. Rectangle and polygon only: the list filter is "projects inside the
+    drawn shape", which a point or a line cannot express.
+  -->
+  <arcgis-expand
+    slot="top-left"
+    group="map-panel"
+    expand-tooltip="Filter by shape"
+    collapse-tooltip="Close draw tools"
+  >
+    <arcgis-sketch
+      creation-mode="single"
+      hide-create-tools-point
+      hide-create-tools-multipoint
+      hide-create-tools-polyline
+      hide-create-tools-circle
+      hide-selection-tools-lasso-selection
+      hide-selection-tools-rectangle-selection
+      (arcgisCreate)="onSketchCreate($event)"
+      (arcgisUpdate)="onSketchCreate($event)"
+      (arcgisDelete)="onSketchDelete()" />
+  </arcgis-expand>
+
+  <arcgis-search
+    slot="top-right"
+    include-default-sources-disabled
+    (arcgisReady)="onSearchReady($event)" />
+
+  <arcgis-scale-bar slot="bottom-left" unit="metric" />
+  <arcgis-coordinate-conversion slot="bottom-right" />
+</arcgis-map>
