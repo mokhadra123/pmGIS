@@ -1,0 +1,38 @@
+<div class="backdrop" (keydown)="onKeydown($event)" tabindex="-1">
+  <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+    <h2 id="confirm-title">{{ title() }}</h2>
+
+    @if (body()) {
+      <p class="body">{{ body() }}</p>
+    }
+
+    <label class="field">
+      <span class="label">
+        Type <strong>{{ challenge() }}</strong> to confirm
+      </span>
+      <input
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        [ngModel]="typed()"
+        (ngModelChange)="typed.set($event)"
+        [disabled]="busy()"
+        autofocus
+      />
+    </label>
+
+    <div class="actions">
+      <button type="button" class="ghost" [disabled]="busy()" (click)="cancelled.emit()">
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="danger"
+        [disabled]="!matches() || busy()"
+        (click)="confirm()"
+      >
+        {{ busy() ? 'Deleting…' : 'Delete' }}
+      </button>
+    </div>
+  </div>
+</div>
