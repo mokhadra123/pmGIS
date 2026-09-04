@@ -6,16 +6,12 @@ export interface Notice {
   readonly id: number;
   readonly kind: NoticeKind;
   readonly message: string;
-  /** When present the toast shows a button that runs this and dismisses itself. */
+  // When present the toast shows a button that runs this and dismisses itself.
   readonly retry?: () => void;
   readonly retryLabel?: string;
 }
 
-/**
- * Non-blocking messages. The brief is specific that a failed feature-layer query must
- * show a dismissible error with a Retry action rather than a modal or a stuck spinner,
- * so errors stay until dismissed while successes fade on their own.
- */
+// Non-blocking messages.
 @Injectable({ providedIn: 'root' })
 export class Notifications {
   private nextId = 1;
@@ -33,7 +29,7 @@ export class Notifications {
     return id;
   }
 
-  /** Errors persist: the user decides when they have read them. */
+  // Errors persist: the user decides when they have read them.
   error(message: string, retry?: () => void, retryLabel = 'Retry'): number {
     return this.push({ kind: 'error', message, retry, retryLabel }, null);
   }

@@ -16,7 +16,7 @@ import type {
 import { toHttpParams, type ProjectQuery } from './project-query';
 import { type PagedResult } from '@core/models/paging';
 
-//The single data-access point for /api/projects. Components never build a URL or touch HttpClient themselves, so the query rules exist in exactly one place.
+// The single data-access point for /api/projects. Components never build a URL.
 @Injectable({ providedIn: 'root' })
 export class ProjectsApi {
   private readonly http = inject(HttpClient);
@@ -48,7 +48,7 @@ export class ProjectsApi {
     return this.http.post<BulkDeleteResult>(`${this.base}/bulk-delete`, { projectIds });
   }
 
-  // Backs the form's asynchronous uniqueness check on blur. The same check runs again on the server at submit, because a code can be taken in between.
+  // Backs the form's uniqueness check on blur; the server checks again at submit.
   checkCode(code: string, excludeProjectId?: number | null): Observable<CodeAvailability> {
     let params: Record<string, string | number> = { code };
     if (excludeProjectId != null) {

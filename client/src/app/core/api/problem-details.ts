@@ -11,7 +11,7 @@ export interface ProblemDetails {
 export interface ApiFailure {
   readonly status: number;
   readonly message: string;
-  // Field name (as the server names it, e.g. `ProjectCode`, `Activities[2].EndDate`) mapped to its messages. Empty when the failure was not field-specific.
+  // Server field name to its messages. Empty when the failure was not field-specific.
   readonly fieldErrors: Readonly<Record<string, readonly string[]>>;
 }
 
@@ -42,7 +42,7 @@ export function toApiFailure(error: unknown): ApiFailure {
   };
 }
 
-/// Server field names are PascalCase and use indexer syntax for collections (`Activities[2].EndDate`). The form controls are camelCase. This maps one to the other so a server-side rejection can be shown next to the field that caused it.
+// Maps a server field name onto its camelCase form control path.
 export function toControlPath(serverField: string): string {
   return serverField
     .split('.')

@@ -23,7 +23,7 @@ export type SortDirection = 'asc' | 'desc';
 // A map extent as [minLon, minLat, maxLon, maxLat] in WGS84.
 export type Bbox = readonly [number, number, number, number];
 
-//Every input the Projects List can vary, in one object — the client-side twin of the server's ProjectQuery. The grid, the CSV export and the URL all build from this, which is what keeps the exported file identical to what is on screen.
+// Every input the Projects List can vary, in one object. Twin of the server's ProjectQuery.
 export interface ProjectQuery {
   readonly page: number;
   readonly pageSize: number;
@@ -68,7 +68,7 @@ export function hasActiveFilters(query: ProjectQuery): boolean {
   );
 }
 
-// The single place a ProjectQuery becomes query-string parameters. Both the JSON list request and the CSV export URL go through here, so the export can never drift from the grid.
+// The single place a query becomes parameters, so the export cannot drift from the grid.
 export function toHttpParams(query: ProjectQuery, includePaging = true): HttpParams {
   let params = new HttpParams().set('sort', query.sort).set('dir', query.dir);
 

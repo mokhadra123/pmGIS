@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
   api: {
-    // Same-origin. The dev server proxies /api to the ASP.NET Core API (see proxy.conf.mjs, which picks up the Aspire-injected service address when the AppHost launches the dev server). In production the client is served from the same origin as the API, or behind a reverse proxy that maps /api to it.
+    // Same-origin: the dev server proxies /api, so no API URL is baked into the build.
     baseUrl: '/api',
   },
   arcgis: {
