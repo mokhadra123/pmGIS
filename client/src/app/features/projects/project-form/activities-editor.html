@@ -1,0 +1,106 @@
+<section class="activities">
+  <header>
+    <h3>Activities</h3>
+    <button type="button" class="add" (click)="add()">Add Activity</button>
+  </header>
+
+  @if (rows().length === 0) {
+    <p class="empty">No activities yet. Add rows to plan the project's work.</p>
+  } @else {
+    <div class="grid-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="idx">#</th>
+            <th>Activity</th>
+            <th>Start Date</th>
+            <th>End Date</th>
+            <th>Status</th>
+            <th>Assigned To</th>
+            <th class="pct">% Complete</th>
+            <th class="act">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track $index; let i = $index) {
+            <tr [formGroup]="row" [class.invalid]="rowHasError(row)">
+              <td class="idx">{{ i + 1 }}</td>
+
+              <td>
+                <input
+                  type="text"
+                  formControlName="name"
+                  placeholder="Activity name"
+                  [attr.aria-label]="'Activity ' + (i + 1) + ' name'"
+                />
+              </td>
+
+              <td>
+                <input type="date" formControlName="startDate" />
+              </td>
+
+              <td>
+                <input type="date" formControlName="endDate" />
+              </td>
+
+              <td>
+                <select
+                  [value]="row.get('status')?.value"
+                  (change)="onStatusChange(row, $any($event.target).value)"
+                >
+                  @for (status of allowedStatuses(row); track status.id) {
+                    <option [value]="status.id">{{ status.name }}</option>
+                  }
+                </select>
+              </td>
+
+              <td>
+                <select formControlName="assignedToUserId">
+                  <option [ngValue]="null">— Select —</option>
+                  @for (user of users(); track user.id) {
+                    <option [ngValue]="user.id">{{ user.name }}</option>
+                  }
+                </select>
+              </td>
+
+              <td class="pct">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  formControlName="percentComplete"
+                  [readOnly]="!percentEditable(row)"
+                  [title]="
+                    percentEditable(row)
+                      ? '% Complete'
+                      : '% Complete is set by the status outside In Progress'
+                  "
+                />
+              </td>
+
+              <td class="act">
+                @if (confirmingIndex() === i) {
+                  <button type="button" class="danger-link" (click)="remove(i)">Confirm</button>
+                  <button type="button" class="link" (click)="cancelRemove()">Cancel</button>
+                } @else {
+                  <button
+                    type="button"
+                    class="icon-btn icon-btn--danger"
+                    title="Delete activity"
+                    [attr.aria-label]="'Delete activity ' + (i + 1)"
+                    (click)="askRemove(i)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" />
+                    </svg>
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

@@ -1,0 +1,174 @@
+<header class="panel-head">
+  <h2>{{ isEdit() ? 'Edit Project' : 'Add Project' }}</h2>
+  <button type="button" class="close" aria-label="Close" (click)="cancel()">&times;</button>
+</header>
+
+@if (loading()) {
+  <p class="state">Loading project…</p>
+} @else if (loadFailure(); as message) {
+  <div class="state error" role="alert">
+    <p>{{ message }}</p>
+    <button type="button" class="ghost" (click)="cancel()">Back to list</button>
+  </div>
+} @else {
+  @if (draftRestoredAt(); as savedAt) {
+    <div class="draft-banner" role="status">
+      <span>Restored an unsaved draft from {{ savedAt | date: 'HH:mm' }}.</span>
+      <button type="button" class="link" (click)="discardDraft()">Discard draft</button>
+    </div>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <div class="scroll">
+      <section>
+        <h3>Project Details</h3>
+
+        <div class="two">
+          <label class="field">
+            <span class="label">Project Name <em>*</em></span>
+            <input type="text" formControlName="name" autocomplete="off" />
+            @if (showError('name', 'required')) {
+              <span class="err">Project Name is required.</span>
+            }
+            @if (showError('name', 'maxlength')) {
+              <span class="err">Project Name is limited to 200 characters.</span>
+            }
+            @if (serverError('name'); as message) {
+              <span class="err">{{ message }}</span>
+            }
+          </label>
+
+          <label class="field">
+            <span class="label">
+              Project Code <em>*</em>
+              @if (codePending()) {
+                <small class="pending">checking…</small>
+              }
+            </span>
+            <input
+              type="text"
+              formControlName="projectCode"
+              placeholder="ABC-0000"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            @if (showError('projectCode', 'required')) {
+              <span class="err">Project Code is required.</span>
+            }
+            @if (showError('projectCode', 'pattern')) {
+              <span class="err">
+                Must be three uppercase letters, a hyphen and four digits — for example
+                ABC-0000.
+              </span>
+            }
+            @if (showError('projectCode', 'codeTaken')) {
+              <span class="err">That project code is already in use.</span>
+            }
+            @if (serverError('projectCode'); as message) {
+              <span class="err">{{ message }}</span>
+            }
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="label">
+            Description
+            <small class="counter" [class.over]="descriptionLength() > descriptionMax">
+              {{ descriptionLength() }} / {{ descriptionMax }}
+            </small>
+          </span>
+          <textarea formControlName="description" rows="3"></textarea>
+          @if (showError('description', 'maxlength')) {
+            <span class="err">Description is limited to {{ descriptionMax }} characters.</span>
+          }
+        </label>
+
+        <div class="two">
+          <label class="field">
+            <span class="label">Project Type</span>
+            <select formControlName="projectTypeId">
+              <option [ngValue]="null">— Select Project Type —</option>
+              @for (type of projectTypes(); track type.id) {
+                <option [ngValue]="type.id">{{ type.name }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="label">Status</span>
+            <select formControlName="status">
+              @for (status of projectStatuses(); track status.id) {
+                <option [ngValue]="status.id">{{ status.name }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="two">
+          <label class="field">
+            <span class="label">Start Date</span>
+            <input type="date" formControlName="startDate" />
+          </label>
+
+          <label class="field">
+            <span class="label">End Date</span>
+            <input type="date" formControlName="endDate" />
+          </label>
+        </div>
+
+        @if (form.hasError('endAfterStart')) {
+          <p class="err block">End Date must be later than Start Date.</p>
+        }
+
+        <div class="two">
+          <label class="field">
+            <span class="label">Budget</span>
+            <input
+              type="number"
+              formControlName="budget"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+              placeholder="0.00"
+            />
+            @if (showError('budget', 'min')) {
+              <span class="err">Budget cannot be negative.</span>
+            }
+          </label>
+
+          <label class="field">
+            <span class="label">Project Owner</span>
+            <select formControlName="ownerUserId">
+              <option [ngValue]="null">— Unassigned —</option>
+              @for (user of users(); track user.id) {
+                <option [ngValue]="user.id">{{ user.name }}</option>
+              }
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <app-location-picker [form]="form" />
+
+      <app-activities-editor [activities]="activities" [addRow]="addActivityRow" />
+
+      @if (activitySummary().length > 0) {
+        <div class="summary" role="alert">
+          <strong>{{ activitySummary().length }} activity problems must be fixed:</strong>
+          <ul>
+            @for (message of activitySummary(); track message) {
+              <li>{{ message }}</li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+
+    <footer class="panel-foot">
+      <button type="button" class="ghost" (click)="cancel()">Cancel</button>
+      <button type="submit" class="primary" [disabled]="!canSubmit()">
+        {{ saving() ? 'Saving…' : 'Save Project' }}
+      </button>
+    </footer>
+  </form>
+}
