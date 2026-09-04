@@ -4,8 +4,8 @@ Decisions taken where the brief is silent, ambiguous, or leaves a genuine choice
 Each entry records what the brief says, what was decided, and why — so a reviewer can
 tell a considered choice from an oversight.
 
-This file grows as the project does. It currently covers the domain, data-access, API and
-feature-layer work.
+This file grows as the project does. It currently covers the domain, data-access, API,
+feature-layer and client work.
 
 _Last updated: 2026-09-04_
 
@@ -493,6 +493,65 @@ deliberately, in controlled batches, when wanted.
 
 ---
 
+## Client
+
+### The allowed project boundary is configuration, not data
+
+**Brief says:** _"Validate that the selected point falls inside the allowed project
+boundary. A point outside the boundary must be rejected with a clear message."_ It never
+defines the boundary.
+
+**Decision:** A bounding box covering Egypt, held in the client's `APP_CONFIG` as
+`[minLon, minLat, maxLon, maxLat]` in WGS84.
+
+**Reasoning:** The requirement needs a boundary to exist, and there is nothing to derive
+one from: the brief gives no geometry, and the API exposes no boundary resource. Treating
+it as configuration rather than data keeps it in one named place instead of scattering a
+literal through the location picker.
+
+Egypt was chosen because it matches the seeded project locations and the default map
+centre, so the rule can actually be exercised — a boundary no seeded project falls outside
+would be untestable.
+
+**Trade-off:** A rectangle is a crude approximation of a country, so a point in
+neighbouring territory inside the box would be accepted. A real deployment would validate
+against an authoritative polygon, most likely served by the API so the same boundary
+governs both sides. The client-side check is the immediate feedback the brief asks for,
+not an authority.
+
+### The client mirrors the domain rules rather than sharing them
+
+**Brief says:** _"Validation rules must be enforced on both the client and the server, not
+only in the browser."_
+
+**Decision:** The activity status machine, the percent-complete rules and the project code
+pattern exist twice — once in `PMGIS.Domain.Rules`, once in the client's `core/rules`.
+
+**Reasoning:** The two runtimes cannot share code, so a mirror is the only option short of
+generating one from the other. They are kept deliberately parallel: same function names,
+same shape, so a change to one is an obvious prompt to change the other.
+
+**Trade-off:** Duplication that can drift. It is bounded — three small pure functions and a
+regular expression — and the server remains the enforcement point, so drift degrades the
+immediacy of feedback rather than data integrity.
+
+### Transport models are hand-written, not generated
+
+**Decision:** The TypeScript interfaces under `core/models` are written by hand to match the
+API contracts, rather than generated from the OpenAPI document.
+
+**Reasoning:** The API exposes an OpenAPI document, so a generated client was possible.
+Hand-written models were chosen because the set is small and stable, and because the
+generated output would carry names and shapes the client does not want — most of the
+transport types differ slightly in intent from their server DTOs.
+
+**Trade-off:** Nothing enforces that the two agree. `HttpClient.get<T>()` is an unchecked
+cast, so a mismatch between a model and the JSON is invisible to the compiler and surfaces
+as `undefined` at runtime. Contracts are therefore verified by exercising the endpoints,
+not by the type system.
+
+---
+
 ## Conventions
 
 ### Comments are single-line; reasoning lives here
@@ -515,9 +574,5 @@ Recorded here so their absence reads as a decision rather than an omission.
   user is a constant_ above for how audit fields are populated in the meantime.
 - **Automated tests.** The brief lists no testing requirement and the rubric has no line
   for it. Behaviour was verified by exercising the endpoints against the seeded database.
-- **The allowed project boundary.** The brief requires a placed point to be validated
-  against an allowed boundary but never defines one, and the API exposes no boundary
-  resource. It is therefore client configuration rather than data; to be settled when the
-  location picker is built.
 - **Layer attribute schema.** Required as a deliverable. To be documented alongside the
   client work, once the fields actually written to the layer are settled.
