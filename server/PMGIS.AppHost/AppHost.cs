@@ -17,7 +17,6 @@ var database = postgres.AddDatabase("pmgisdb");
 var api = builder.AddProject<Projects.PMGIS_Api>("api")
     .WithReference(database)
     .WaitFor(database)
-
     .WithExternalHttpEndpoints();
 
 // The Angular dev server. The path is relative to this project.
