@@ -44,13 +44,14 @@ public sealed class BackfillProjectFeaturesCommandHandler(
         var existingBySourceId = (await featureService.GetOwnedFeaturesAsync(ct))
             .Where(f => f.SourceId.HasValue)
             .GroupBy(f => f.SourceId!.Value)
-            .ToDictionary(g => g.Key, g => g.First().ObjectId);
+            .ToDictionary(g => g.Key, g => g.First());
 
         logger.LogInformation(
             "Layer already holds {Count} features owned by this application.", existingBySourceId.Count);
 
         var created = 0;
         var adopted = 0;
+        var foreign = 0;
         var written = 0;
         var attempted = 0;
         var batches = 0;
@@ -91,11 +92,26 @@ public sealed class BackfillProjectFeaturesCommandHandler(
             {
                 var sourceId = SourceIdFor(project.Id);
 
-                if (existingBySourceId.TryGetValue(sourceId, out var existingObjectId))
+                // Adopt only a feature this application actually created. Occupying the
+                // SOURCEID slot is not proof of ownership on a shared layer, where another
+                // consumer may use the same range, so the project code has to agree too.
+                if (existingBySourceId.TryGetValue(sourceId, out var existing))
                 {
-                    project.ObjectId = existingObjectId;
-                    adopted++;
-                    continue;
+                    if (string.Equals(existing.ProjectCode, project.ProjectCode, StringComparison.Ordinal))
+                    {
+                        project.ObjectId = existing.ObjectId;
+                        adopted++;
+                        continue;
+                    }
+
+                    // Someone else's feature sits in this slot. Create our own rather than
+                    // claim theirs; theirs stays an orphan in the reconciliation report.
+                    logger.LogWarning(
+                        "SOURCEID {SourceId} is held by feature {ObjectId} carrying code {LayerCode}, " +
+                        "not {ProjectCode}. Creating a separate feature instead of adopting it.",
+                        sourceId, existing.ObjectId, existing.ProjectCode ?? "(none)", project.ProjectCode);
+
+                    foreign++;
                 }
 
                 toAdd.Add(project);
@@ -194,8 +210,9 @@ public sealed class BackfillProjectFeaturesCommandHandler(
 
         logger.LogInformation(
             "Backfill finished in {Elapsed:0.0}s: {Created} created, {Adopted} adopted, " +
-            "{Written} ObjectIds written, {Failures} failures.",
-            stopwatch.Elapsed.TotalSeconds, created, adopted, written, failureCount);
+            "{Foreign} SOURCEID slots held by other consumers, {Written} ObjectIds written, " +
+            "{Failures} failures.",
+            stopwatch.Elapsed.TotalSeconds, created, adopted, foreign, written, failureCount);
 
         return new BackfillProjectFeaturesResult
         {
