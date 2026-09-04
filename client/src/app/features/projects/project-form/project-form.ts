@@ -28,7 +28,9 @@ import { APP_CONFIG } from '@core/config/app-config';
 import {
   ActivityStatus,
   ProjectStatus,
+  type IsoDate,
   type ProjectDetail,
+  type ProjectListItem,
   type SaveActivityPayload,
   type SaveProjectPayload,
 } from '@core/models/project';
@@ -422,6 +424,11 @@ export class ProjectForm {
     const id = this.projectId();
     const request = id === null ? this.api.create(payload) : this.api.update(id, payload);
 
+    // Edit only: the row is already on screen, so apply the change before the server
+    // answers and keep the undo. A new project is not on the current page yet.
+    const rollback =
+      id === null ? null : this.store.patchRowOptimistically(id, this.listRow(payload));
+
     request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (result) => {
         this.saving.set(false);
@@ -435,10 +442,31 @@ export class ProjectForm {
         void this.router.navigate(['/projects', result.id]);
       },
       error: (error: unknown) => {
+        // The save was refused, so put the row back to what the server still holds.
+        rollback?.();
         this.saving.set(false);
         this.applyServerErrors(error);
       },
     });
+  }
+
+  // The list columns this form can change, so an edited row updates before the reload
+  // lands. Duration mirrors the database's inclusive computed column.
+  private listRow(payload: SaveProjectPayload): Partial<ProjectListItem> {
+    const type = this.projectTypes().find((t) => t.id === payload.projectTypeId);
+
+    return {
+      name: payload.name,
+      projectCode: payload.projectCode,
+      projectTypeName: type?.name ?? null,
+      status: payload.status,
+      startDate: payload.startDate,
+      endDate: payload.endDate,
+      activityCount: payload.activities.length,
+      durationDays: inclusiveDays(payload.startDate, payload.endDate),
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+    };
   }
 
   private toPayload(): SaveProjectPayload {
@@ -518,4 +546,14 @@ export class ProjectForm {
   protected cancel(): void {
     void this.router.navigate(['/']);
   }
+}
+
+// Inclusive day count between two ISO dates, mirroring the Projects.DurationDays column.
+function inclusiveDays(start: IsoDate | null, end: IsoDate | null): number | null {
+  if (!start || !end) {
+    return null;
+  }
+
+  const ms = Date.parse(end) - Date.parse(start);
+  return Number.isNaN(ms) ? null : Math.floor(ms / 86_400_000) + 1;
 }
