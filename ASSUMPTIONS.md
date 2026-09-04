@@ -451,16 +451,33 @@ case is logged at critical and is exactly what the reconciliation report exists 
 **Brief says:** nothing. The supplied layer is a shared public sample that other people
 also write to.
 
-**Decision:** Every feature this application creates carries `SOURCEID = 900000 + project
-Id`. Reads apply a definition expression of `SOURCEID >= 900000`, and the reconciliation
+**Decision:** Every feature this application creates carries `SOURCEID = 5000000 + project
+Id`. Reads apply a definition expression of `SOURCEID >= 5000000`, and the reconciliation
 report is scoped the same way.
 
 **Reasoning:** Without a scope, every feature written by any other consumer of the shared
 layer would be reported as an orphan, making the reconciliation check useless. Deriving the
-value from the project Id makes it stable and collision-free within our range, and means
-the single-create path and the bulk backfill compute the same value for the same project —
-which is what lets an interrupted backfill adopt the feature it already created instead of
-duplicating it.
+value from the project Id means the single-create path and the bulk backfill compute the
+same value for the same project, so an interrupted backfill can find the feature it already
+created instead of duplicating it.
+
+**What happened:** the base was originally `900000`, and this entry claimed the derived
+value was "stable and collision-free within our range". The second half of that was wrong.
+The range was never ours to claim: another consumer of the same public layer had chosen the
+identical `900000 + id` scheme, so the layer held `SOURCEID`s from 900001 to 905002
+belonging to a different dataset. The map drew 4,223 of their points as though they were
+projects and reported "no matching project row" on click, and a backfill run adopted
+features carrying the codes `PRJ-0001` and `PRJ-0003` for the projects `TEL-0001` and
+`TEL-0003`, silently pointing three project rows at a stranger's geometry.
+
+Two things changed as a result. The base moved to `5000000`, clear of that cluster. And
+adoption no longer trusts the slot alone: the feature's `name` must also carry the project's
+code, otherwise the run logs a warning and creates its own feature, leaving the other
+consumer's point untouched and correctly reported as an orphan.
+
+**Residual risk:** an exclusive range on a public layer is a convention, not a guarantee.
+Nothing stops a third consumer from also picking `5000000`. The code check is what keeps
+that from being adopted silently; the definition expression would still draw their points.
 
 ### The layer is used anonymously
 
@@ -481,7 +498,8 @@ and writes back only the ObjectIds whose per-feature result reported success.
 **Reasoning:** A backfill of thousands of rows should not discard an entire batch because
 one geometry was rejected. Rows that fail keep no ObjectId, so they remain candidates and
 the next run retries them. Idempotency comes from the candidate filter itself plus adoption
-by SOURCEID, so a re-run cannot double up points in a shared public layer.
+of a feature whose `SOURCEID` slot _and_ project code both match, so a re-run cannot double
+up points in a shared public layer.
 
 ### Seeded projects have no features
 
@@ -822,8 +840,8 @@ not described.
 - **`name`** — the Project Code. It is what the Search widget searches
   (`APP_CONFIG.arcgis.searchField`), what the popup title shows, and how a clicked point is
   resolved back to a project row.
-- **`SOURCEID`** — `900000` and above, namespacing this application's features inside the
-  shared sample layer. The client applies `SOURCEID >= 900000` as the layer's definition
+- **`SOURCEID`** — `5000000` and above, namespacing this application's features inside the
+  shared sample layer. The client applies `SOURCEID >= 5000000` as the layer's definition
   expression so no other consumer's points are drawn, clustered, searched or counted.
 
 Geometry is a single point in WGS84. The layer's `outFields` are limited to those three.

@@ -121,7 +121,7 @@ which Aspire normally supplies.
   "ArcGis": {
     "FeatureLayerUrl": "https://services3.arcgis.com/GVgbJbqm8hXASVYi/ArcGIS/rest/services/my_points/FeatureServer/0",
     "TokenUrl": "https://www.arcgis.com/sharing/rest/generateToken",
-    "SourceIdBase": 900000,
+    "SourceIdBase": 5000000,
     "CodeField": "name",
     "SourceIdField": "SOURCEID",
     "QueryPageSize": 1000
@@ -135,7 +135,7 @@ which Aspire normally supplies.
 | `ArcGis:FeatureLayerUrl` | Full layer URL, ending in the layer index. |
 | `ArcGis:TokenUrl` | Token endpoint, used only if credentials are set. |
 | `ArcGis:Username` / `Password` | Not set. The layer is used anonymously; the token provider returns null and no token is sent. Set both to point the app at a secured layer — no code change. |
-| `ArcGis:SourceIdBase` | `900000`. Features this app owns carry `SOURCEID >= 900000`. |
+| `ArcGis:SourceIdBase` | `5000000`. Features this app owns carry `SOURCEID >= 5000000`. |
 | `ArcGis:CodeField` | `name` — the layer attribute that holds the Project Code. |
 | `ArcGis:SourceIdField` | `SOURCEID`. |
 | `ArcGis:QueryPageSize` | `1000`, under the layer's `maxRecordCount` of 10000. |
@@ -156,7 +156,7 @@ Do not put credentials in `appsettings.json`. Use user secrets on `PMGIS.Api` if
 | --- | --- | --- |
 | `api.baseUrl` | `/api` | Same origin; the dev proxy handles the rest. |
 | `arcgis.projectLayerURL` | the layer URL | **Must match `ArcGis:FeatureLayerUrl`.** |
-| `arcgis.sourceIdBase` | `900_000` | **Must match `ArcGis:SourceIdBase`.** The client uses it as the layer's definition expression; if the two drift, the map draws points the server does not consider its own, or hides points it created. |
+| `arcgis.sourceIdBase` | `5_000_000` | **Must match `ArcGis:SourceIdBase`.** The client uses it as the layer's definition expression; if the two drift, the map draws points the server does not consider its own, or hides points it created. |
 | `arcgis.searchField` | `name` | Backs the map Search widget. Must match `ArcGis:CodeField`. |
 | `arcgis.reverseGeocodeURL` | World GeocodeServer | Anonymous, decorative. Failures are swallowed. |
 | `map.*` | centre, zoom, cluster scale | Initial view is Cairo at zoom 10. |
@@ -224,7 +224,7 @@ application chose which of its existing fields to use rather than designing new 
 | --- | --- | --- | --- | --- |
 | `OBJECTID` | `esriFieldTypeOID` | — | no | Assigned by the service on create. Stored on the project row as `Project.ObjectId`; this is the link between the two stores. |
 | `name` | `esriFieldTypeString` | 256 | yes | The **Project Code** (`ABC-0000`), not the project's display name. Search widget field, popup title, and how a clicked point is resolved back to a project row. |
-| `SOURCEID` | `esriFieldTypeInteger` | — | yes | `900000 + projectId`. Namespaces this application's features inside the shared layer. |
+| `SOURCEID` | `esriFieldTypeInteger` | — | yes | `5000000 + projectId`. Namespaces this application's features inside the shared layer. |
 | `rating` | `esriFieldTypeString` | 256 | yes | Present on the layer. **Not read or written by this application.** |
 | geometry | point, WGS84 | — | — | The project's location. Longitude/latitude are also mirrored onto the project row. |
 
@@ -236,14 +236,19 @@ The layer is public and other consumers write to it. Every read the application 
 map layer, the popup lookups, the reconciliation report — applies:
 
 ```
-SOURCEID >= 900000
+SOURCEID >= 5000000
 ```
 
 Without it, every feature written by anyone else would be drawn on the map and reported as an
 orphan by the reconciliation check, making that check useless. `SOURCEID` is derived from the
-project id, so it is stable and collision-free within this app's range, and the single-create
-path and the bulk backfill compute the same value for the same project. That is what lets an
-interrupted backfill adopt a feature it already created instead of duplicating it.
+project id, so the single-create path and the bulk backfill compute the same value for the same
+project, which is what lets an interrupted backfill find a feature it already created instead of
+duplicating it.
+
+The base is `5000000` rather than the `900000` used earlier because another consumer of the same
+public layer had taken that range: the map drew thousands of their points as projects. A range on
+a public layer is a convention and not a guarantee, so the backfill adopts a feature only when its
+`name` also carries the project's code — see ASSUMPTIONS.md.
 
 `name` carries the Project Code rather than the project name because it is the layer's only
 searchable text field and the code is the unique, stable identifier of the two. The layer holds
@@ -284,7 +289,7 @@ to `lastModifiedOn`. `dir` is descending unless it is exactly `asc`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/gis/reconciliation` | Features with no project row, and project rows whose `ObjectId` no longer exists in the layer. Scoped to `SOURCEID >= 900000`. |
+| GET | `/api/gis/reconciliation` | Features with no project row, and project rows whose `ObjectId` no longer exists in the layer. Scoped to `SOURCEID >= 5000000`. |
 | POST | `/api/gis/backfill-features` | Creates layer points for project rows that have a location but no `ObjectId`. Body: `batchSize` (default 200), `maxProjects`. Safe to re-run. **Writes to the shared public layer.** |
 
 ## Demo walkthrough
@@ -326,7 +331,7 @@ are easiest from Scalar at `<api>/scalar`.
     in `Content-Disposition`.
 11. **Nearby (spatial query).** `GET /api/projects/nearby?latitude=30.0444&longitude=31.2357&radiusKm=25`.
     Returns seeded projects around Cairo, nearest first, computed in PostGIS. API-only.
-12. **Reconciliation.** `GET /api/gis/reconciliation`. Lists features under `SOURCEID >= 900000`
+12. **Reconciliation.** `GET /api/gis/reconciliation`. Lists features under `SOURCEID >= 5000000`
     with no matching project row, and project rows whose `ObjectId` is no longer in the layer. On a
     clean run both lists are empty. To see it do work, create a project through the UI, then delete
     its row directly in the database and re-run the report — the feature is reported as an orphan.
@@ -341,8 +346,9 @@ To see the map populated with all 5,000 seeded projects, run
   is not acceptable. Until `POST /api/gis/backfill-features` is run, the map shows only projects
   created through the UI, and map-to-list selection has nothing to match for seeded rows.
   Projects created or edited in the UI do get features immediately. The backfill is idempotent —
-  it skips rows that already have an `ObjectId` and adopts an existing feature under the same
-  `SOURCEID` rather than duplicating it — but it does write to a layer other people share, so run
+  it skips rows that already have an `ObjectId` and adopts an existing feature whose `SOURCEID`
+  and project code both match rather than duplicating it; a slot held by another consumer's
+  feature is logged and left alone — but it does write to a layer other people share, so run
   it knowingly and consider `maxProjects` to cap it.
 - **No automated tests.** The rubric has no line for testing and none were written. `vitest` is
   configured in the client but there are no spec files. Behaviour was verified by exercising the
