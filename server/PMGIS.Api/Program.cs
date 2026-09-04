@@ -1,7 +1,10 @@
 using PMGIS.Api.Features.Gis;
 using PMGIS.Api.Features.Lookups;
 using PMGIS.Api.Features.Projects;
+using Microsoft.EntityFrameworkCore;
+
 using PMGIS.Infrastructure;
+using PMGIS.Infrastructure.Data;
 using PMGIS.Infrastructure.Seeding;
 
 using Scalar.AspNetCore;
@@ -53,6 +56,19 @@ if (app.Environment.IsDevelopment())
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<DataSeeder>().SeedAsync();
 }
+else
+{
+    // The published image carries the Angular build in wwwroot. Serving it from this
+    // origin is what APP_CONFIG.api.baseUrl ('/api') already assumes, so the deployed
+    // client needs no API URL and triggers no CORS preflight.
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+
+    // Outside development the seeder never runs, so this is the only thing that brings
+    // the schema up to date.
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<PmgisDbContext>().Database.MigrateAsync();
+}
 
 // The whole API surface, one line per feature.
 app.MapLookupsFeature();
@@ -60,5 +76,12 @@ app.MapProjectsFeature();
 app.MapGisFeature();
 
 app.MapDefaultEndpoints();
+
+// Deep links such as /projects/42 are Angular routes, not API routes: hand anything the
+// API did not match back to the SPA shell.
+if (!app.Environment.IsDevelopment())
+{
+    app.MapFallbackToFile("index.html");
+}
 
 app.Run();
