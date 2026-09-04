@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 using PMGIS.Domain.Entities;
 using PMGIS.Infrastructure.Data;
@@ -7,12 +8,17 @@ using PMGIS.Infrastructure.Gis;
 namespace PMGIS.Api.Features.Projects.Shared;
 
 // The feature-layer half of a project write, shared by the create and update slices.
-public sealed class ProjectFeatureSync(PmgisDbContext db, IFeatureServiceClient featureService)
+public sealed class ProjectFeatureSync(
+    PmgisDbContext db,
+    IFeatureServiceClient featureService,
+    IOptions<ArcGisOptions> options)
 {
+    private readonly ArcGisOptions _options = options.Value;
+
     // SOURCEID namespaces this application's features inside the shared sample layer.
     public async Task<int> NextSourceIdAsync(CancellationToken ct)
     {
-        const int baseId = 900_000;
+        var baseId = _options.SourceIdBase;
 
         var highWaterMark = await db.Database
             .SqlQueryRaw<int>(

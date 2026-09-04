@@ -16,7 +16,7 @@ public sealed class ArcGisOptions
     public string? Password { get; set; }
 
     // Features this application owns carry a SOURCEID at or above this value.
-    public int SourceIdBase { get; set; } = 900_000;
+    public int SourceIdBase { get; set; } = 5_000_000;
 
     // Attribute holding the Project Code.
     public string CodeField { get; set; } = "name";

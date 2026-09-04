@@ -10,7 +10,7 @@ export const APP_CONFIG = {
 
     // SOURCEID namespaces this application's features inside the shared sample
     // layer. The server allocates ids from the same base (see ProjectFeatureSync).
-    sourceIdBase: 900_000,
+    sourceIdBase: 5_000_000,
 
     // Anonymous reverse geocoding for read-only address context on the picked point.
     // Failure here is never fatal: the address is decoration, not data we store.
