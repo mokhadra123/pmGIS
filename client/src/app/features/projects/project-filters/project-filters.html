@@ -1,0 +1,101 @@
+<div class="filters">
+  <button
+    type="button"
+    class="toggle"
+    [attr.aria-expanded]="expanded()"
+    (click)="expanded.set(!expanded())"
+  >
+    <span class="chevron" [class.open]="expanded()">›</span>
+    Filters
+    @if (activeCount() > 0) {
+      <span class="badge">{{ activeCount() }}</span>
+    }
+  </button>
+
+  @if (expanded()) {
+    <div class="panel">
+      <fieldset>
+        <legend>Project Type</legend>
+        @if (projectTypes().length === 0) {
+          <p class="muted">Could not load project types.</p>
+        }
+        <div class="chips">
+          @for (type of projectTypes(); track type.id) {
+            <label class="chip" [class.on]="store.query().typeIds.includes(type.id)">
+              <input
+                type="checkbox"
+                [checked]="store.query().typeIds.includes(type.id)"
+                (change)="toggleType(type.id)"
+              />
+              {{ type.name }}
+            </label>
+          }
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Status</legend>
+        <div class="chips">
+          @for (status of statuses(); track status.code) {
+            <label class="chip" [class.on]="store.query().statuses.includes(status.code)">
+              <input
+                type="checkbox"
+                [checked]="store.query().statuses.includes(status.code)"
+                (change)="toggleStatus(status.code)"
+              />
+              {{ status.name }}
+            </label>
+          }
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Date range</legend>
+        <p class="hint">Matches projects whose dates overlap this range.</p>
+        <div class="dates">
+          <label>
+            <span>From</span>
+            <input
+              type="date"
+              [value]="store.query().dateFrom ?? ''"
+              (change)="setDateFrom($any($event.target).value)"
+            />
+          </label>
+          <label>
+            <span>To</span>
+            <input
+              type="date"
+              [value]="store.query().dateTo ?? ''"
+              (change)="setDateTo($any($event.target).value)"
+            />
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Map</legend>
+        <label class="switch">
+          <input
+            type="checkbox"
+            [checked]="mapBridge.extentFilterEnabled()"
+            (change)="toggleExtentFilter()"
+          />
+          Only projects in current map extent
+        </label>
+
+        @if (store.query().polygonWkt) {
+          <div class="sketch-active">
+            <span>Filtered by drawn shape</span>
+            <button type="button" class="link" (click)="clearSketch()">Clear shape</button>
+          </div>
+        } @else {
+          <p class="hint">Use the draw tools on the map to filter by a drawn shape.</p>
+        }
+      </fieldset>
+
+      @if (store.hasFilters()) {
+        <button type="button" class="clear" (click)="clearAll()">Clear all filters</button>
+      }
+    </div>
+  }
+</div>
