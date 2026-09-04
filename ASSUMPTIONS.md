@@ -565,6 +565,280 @@ cast, so a mismatch between a model and the JSON is invisible to the compiler an
 as `undefined` at runtime. Contracts are therefore verified by exercising the endpoints,
 not by the type system.
 
+### The map is a sibling of the router outlet, not a route
+
+**Brief says:** Nothing about routing. It describes a workspace with a Projects List, a
+map, and Add / Edit / Details views.
+
+**Decision:** The `Workspace` component holds three panes: the list, `<app-project-map>`,
+and a `<router-outlet>`. The map is a fixed sibling of the outlet. Only the detail pane is
+routed — `projects/new`, `projects/:id/edit` and `projects/:id` are children of the empty
+path, and the pane is rendered only while the URL contains `/projects`.
+
+**Reasoning:** An ArcGIS `MapView` is expensive to construct and holds view state — extent,
+layer views, the highlight handle, the sketch graphic. If the map were inside the outlet,
+every navigation between the list, the form and the details view would destroy and rebuild
+it: the basemap would flash, the extent would reset, and the extent filter would fire a new
+query on every navigation. Keeping it outside the outlet means the map is created once for
+the session and navigation only swaps the third column.
+
+**Trade-off:** The map cannot participate in routing — it has no route of its own and its
+state is not expressed as route segments, which is why the view state is carried in query
+parameters instead. The panel's visibility is also derived by string-matching
+`/projects` on `NavigationEnd` rather than read from the activated route, so a future
+top-level route containing that substring would open the panel unintentionally.
+
+### Map view state lives in the query string, and writes replace the history entry
+
+**Brief says:** Nothing about deep linking or shareable URLs.
+
+**Decision:** `MapUrlState` mirrors the map centre (`lat`, `lon`, five decimal places), the
+rounded zoom (`z`) and the selected project (`sel`) into the query string. Every write is a
+`router.navigate` with `queryParamsHandling: 'merge'` and `replaceUrl: true`. The view is
+also seeded once when the map first becomes ready, not only when it moves.
+
+**Reasoning:** A map view that cannot be bookmarked or pasted to a colleague is a view that
+has to be re-found by hand. The query string is the only part of the application's state
+the browser already shares, so it is where the view belongs.
+
+Writes replace rather than push because the view changes continuously: `stationary` fires
+after every pan and zoom, and pushing each one would fill the history stack with dozens of
+near-identical entries. Back would then walk the user through their own panning instead of
+returning them to the page they came from. The seed on ready exists because `stationary`
+only fires on a change — a map that is opened and never touched would otherwise produce a
+URL with no view in it at all.
+
+**Trade-off:** Losing history means the browser's Back button cannot undo a pan or zoom.
+That was judged the lesser cost: Back is understood as page navigation, not map navigation,
+and the map's Home widget already returns the view to its starting point. Rounding the
+centre to five decimals and the zoom to an integer also means a restored view is close to,
+not identical to, the one that was shared.
+
+### A clicked point is resolved to a project row through the project code
+
+**Brief says:** _"Clicking a point on the map selects the matching row in the Projects
+List."_ It does not say how the point identifies the row.
+
+**Decision:** The feature layer's `name` attribute holds the Project Code, so a clicked
+feature is resolved in two steps: query the layer for that feature's `name`, then ask the
+API for the project whose code matches. Results are memoised per ObjectId in the map
+component, and the reverse direction — highlighting the feature for a selected row — runs
+the same mapping backwards, querying the layer with `where name = '<code>'`.
+
+**Reasoning:** The link between the two stores is `Project.ObjectId`, held on the database
+row, and the shared sample layer has no field for the project's database id. Nothing in the
+feature therefore points back at a row directly, so the code is the only identifier both
+sides carry. It is unique on the project table, which makes the mapping unambiguous.
+
+**Trade-off:** Selecting a point costs a layer query plus an API call rather than being a
+local lookup. The per-ObjectId cache keeps repeat clicks free, but a first click on any
+point is two round trips. Reversing the direction is worse: `projectCodeFor` scans the
+cache and falls back to fetching the project by id, so highlighting a row that has never
+been clicked costs a further request. A clicked point whose code matches no row is not
+treated as an error — the popup says the point will be listed by the reconciliation check,
+which is the honest description of an orphan feature in a shared layer.
+
+Both the popup and the click handler read `OBJECTID` and give up when it is absent, which
+is how a click on a cluster is distinguished from a click on a single feature.
+
+### The drawn polygon is handed to the server as WGS84 well-known text
+
+**Brief says:** _"Draw a polygon or rectangle on the map and filter the list to the
+projects inside it."_ It does not say how the shape reaches the server.
+
+**Decision:** On the Sketch widget's `complete` state, the geometry is projected to WGS84
+if it is not already, converted to a `POLYGON((...))` WKT string by hand, and published on
+the map bridge as `polygonWkt`. The query sends that string to the API.
+
+**Reasoning:** The server builds its spatial predicates as PostGIS SQL over the mirrored
+latitude and longitude columns, which are WGS84 degrees. WKT is the one geometry encoding
+PostGIS parses natively, so no geometry library is needed on either side of the wire. The
+map's own geometry arrives in Web Mercator, so the projection has to happen somewhere; it
+happens in the browser because that is where the spatial reference is known.
+
+The ring is explicitly closed before being written out. ArcGIS closes its rings already,
+but an unclosed ring makes PostGIS raise _"geometry requires more points"_ rather than
+return an empty result, so the closure is asserted instead of trusted.
+
+**Trade-off:** Only the first ring is emitted, so a polygon with a hole is sent as its
+outer boundary. The Sketch widget as configured cannot draw one, so this is a limitation of
+the encoder rather than a reachable bug. WKT for a large freehand polygon is also a long
+query-string value, which will eventually meet a URL length limit; moving the filter to a
+POST body would be the fix if that were reached.
+
+### The location pin is dragged directly rather than through the Sketch widget
+
+**Brief says:** _"The selected point must be adjustable — the user can drag it or retype
+the coordinates."_
+
+**Decision:** The chosen point is a plain `Graphic` on a dedicated `GraphicsLayer`, and
+dragging is implemented from `pointerdown` / `pointermove` / `pointerup` on the map
+element: a hit test against that layer starts the drag, and each move writes the new
+coordinate into the map bridge. The Sketch widget is present on the map but is used only
+for the polygon filter.
+
+**Reasoning:** The Sketch widget owns the graphics layer it edits — it adds its own
+selection handles, its own delete affordance and its own undo stack, and it is already
+bound to the spatial filter. Pointing it at the location pin as well would mean one widget
+serving two unrelated purposes, with the filter and the location competing for the same
+active tool. A single point that can only be moved is simpler than the widget's general
+case, and hit-testing one layer is a few lines.
+
+**Trade-off:** The hand-rolled drag reimplements things the widget provides for free. It
+uses `event.offsetX/offsetY`, which is correct only while the map element is the event
+target; it has no touch-specific handling beyond what pointer events give; and a `pointerup`
+that lands outside the element leaves `draggingLocation` true until the next release. The
+graphic is also re-rendered from the bridge signal on every change, guarded by a
+`draggingLocation` flag so the pin being dragged is not rebuilt underneath the pointer.
+
+### Reverse geocoding is decoration, and its failure is never surfaced
+
+**Brief says:** _"Show the address of the selected point."_ It says nothing about what
+should happen if the geocoder is unavailable.
+
+**Decision:** The picker calls the anonymous ArcGIS World GeocodeServer for the address of
+the current point, displays whatever comes back, and on any failure sets the address to
+null and moves on. No error is raised, no notification is shown, and the address is never
+sent to the API or stored. The locator module is imported dynamically, so it is only
+downloaded once a point exists.
+
+**Reasoning:** The address is context for the person choosing a point, not data the system
+owns — the authoritative record of a location is the coordinate pair and the feature. A
+geocoding outage should therefore cost the user a label, not the ability to save a project.
+Making the failure visible would train the user to ignore a message about something they
+cannot act on, and making it blocking would let a third-party service outside the brief
+decide whether a project can be created.
+
+**Trade-off:** A silent failure is indistinguishable from a point with no known address, so
+a persistent outage looks like the geocoder simply having nothing to say. The call also
+fires on every change to the point, including each step of a drag, so dragging the pin
+issues a request per pointer move; the requests are cheap and unordered, but the last one
+to return wins rather than the last one issued.
+
+### The form autosaves a draft to local storage, and restore is announced but not automatic
+
+**Brief says:** Nothing about unsaved work. It requires only that the form validate and
+submit.
+
+**Decision:** Every 30 seconds a dirty form is serialised — including activity rows and the
+chosen coordinate — into `localStorage` under a key namespaced by project id (`…draft.new`
+for a new project, `…draft.<id>` for an edit). On entering the form the draft for that key
+is applied over whatever was loaded, the form is marked dirty, and the timestamp is
+recorded so the template can offer Discard. A successful save clears the draft. All three
+storage calls are wrapped in `try`/`catch`.
+
+**Reasoning:** The Add Project form is long — ten project fields plus an unbounded activity
+table — and losing it to an accidental refresh or a closed tab is the kind of failure a
+user blames the application for. Keying by project id keeps an edit-in-progress on one
+project from resurfacing on another. Storage is wrapped because `localStorage` throws in
+private browsing and when the quota is exhausted, and a missing draft is not worth
+interrupting anyone over.
+
+**Trade-off:** On an edit, the restored draft silently wins over the freshly loaded server
+state, so a project changed by someone else since the draft was written will show the stale
+values until Discard is pressed. The banner naming the draft's timestamp is the only signal
+that this happened. The draft is also never expired, so an abandoned one is offered
+indefinitely, and it is written unencrypted to the browser — acceptable for project
+metadata, but it would not be for anything sensitive. A route guard
+(`unsavedChangesGuard`, wired onto both form routes) covers in-session navigation; the
+autosave covers everything the guard cannot see.
+
+### The client restricts the status dropdown as well as validating it
+
+**Brief says:** _"Validation rules must be enforced on both the client and the server."_
+
+**Decision:** Each activity row carries an `originalStatus` control, populated from the
+loaded project and never sent to the server. The status dropdown lists only the statuses
+`canTransition` allows from that original value, and changing the status runs
+`normalizePercentComplete` — the client twin of the server's rule — so the percentage is
+dragged to 0 or 100 as the new status demands. `activityRow` re-checks the same rules as a
+validator.
+
+**Reasoning:** Making the illegal option unselectable is better feedback than rejecting it
+afterwards, and normalising the percentage on the client means the value the user sees
+before saving is the value the server will store — otherwise a row could be submitted at
+40% and come back at 100 with no explanation. The validator is kept as well because the
+dropdown is not the only way a value arrives: a restored draft and a server round trip both
+bypass it.
+
+**Trade-off:** The rule now exists in three places for an existing row — the dropdown's
+filter, the row validator, and the server. They share the `core/rules` functions, so the
+logic is single-sourced, but the decision to apply it in the UI is not. A new row has no
+original status and is therefore allowed to start at any status, which matches the server:
+there is no previous state to transition from.
+
+### Uniqueness is checked on blur and a failed check never blocks the form
+
+**Brief says:** _"Project Code must be unique; the check happens against the server."_
+
+**Decision:** The `projectCode` control uses `updateOn: 'blur'` and an async validator that
+calls the availability endpoint, passing the current project id so an edit does not collide
+with itself. The validator short-circuits to valid when the value does not match the code
+pattern, and `catchError` maps a failed request to valid.
+
+**Reasoning:** Validating on every keystroke would issue a request per character, most of
+them for codes that are half-typed and meaningless. Blur is the point at which the user has
+finished stating an intention.
+
+Swallowing the error is deliberate: the check is a convenience, and the server rejects a
+duplicate on submit regardless. Treating an unreachable availability endpoint as "code
+taken" would block a legitimate save on an unrelated outage, which is the worse failure.
+
+**Trade-off:** A user whose availability check silently failed learns about the collision
+at submit instead of at blur. The server's rejection is placed back onto the field by
+`applyServerErrors`, so the message still lands next to the input rather than only in a
+toast.
+
+### Deletes are applied optimistically, behind a typed confirmation
+
+**Brief says:** _"Delete requires an explicit confirmation"_, and a bulk delete must report
+per-project outcomes.
+
+**Decision:** Confirming a delete requires typing a challenge string — the Project Code for
+a single row, the count for a bulk delete. The rows then leave the table immediately, and
+the store's rollback is invoked if the server refuses. A partial bulk result rolls the
+whole optimistic removal back and then reloads, reporting each failure by id and reason.
+
+**Reasoning:** Typing the code makes a destructive action deliberate rather than a
+misplaced click, and scales to the bulk case where naming every project is impractical.
+Removing the rows before the server answers keeps the table responsive on a slow delete,
+which matters most in the bulk case the brief asks for.
+
+**Trade-off:** On a partial bulk failure the rollback restores every row, including the ones
+that were genuinely deleted, and correctness comes from the reload that follows rather than
+from the optimistic state itself. For the moment between the two the table is briefly wrong.
+Restoring only the survivors would be more precise but would leave the table in a state
+neither the server nor the store agrees on if the reload then failed.
+
+### The layer attribute schema
+
+**Brief says:** the layer schema is a required deliverable; the supplied layer's fields are
+not described.
+
+**Decision:** Three attributes are used, and no others are read or written:
+
+- **`OBJECTID`** — assigned by the feature service, stored on the project row as
+  `Project.ObjectId` and used as the link between the two stores.
+- **`name`** — the Project Code. It is what the Search widget searches
+  (`APP_CONFIG.arcgis.searchField`), what the popup title shows, and how a clicked point is
+  resolved back to a project row.
+- **`SOURCEID`** — `900000` and above, namespacing this application's features inside the
+  shared sample layer. The client applies `SOURCEID >= 900000` as the layer's definition
+  expression so no other consumer's points are drawn, clustered, searched or counted.
+
+Geometry is a single point in WGS84. The layer's `outFields` are limited to those three.
+
+**Reasoning:** The supplied layer is a public sample with a fixed schema that this
+application does not control, so the schema is a matter of choosing which existing fields
+to use rather than designing new ones. `name` carries the Project Code rather than the
+project's name because it is the layer's only searchable text field and the code is the
+unique, stable identifier of the two.
+
+**Trade-off:** The layer holds no copy of the project's display name, its type or its dates,
+so the popup has to fetch them from the API rather than render them from the feature. That
+is accepted — duplicating attributes into a shared public layer would create a second thing
+to keep in sync, and the brief already places project details in the database.
+
 ---
 
 ## Conventions
@@ -589,5 +863,6 @@ Recorded here so their absence reads as a decision rather than an omission.
   user is a constant_ above for how audit fields are populated in the meantime.
 - **Automated tests.** The brief lists no testing requirement and the rubric has no line
   for it. Behaviour was verified by exercising the endpoints against the seeded database.
-- **Layer attribute schema.** Required as a deliverable. To be documented alongside the
-  client work, once the fields actually written to the layer are settled.
+- ~~**Layer attribute schema.**~~ No longer open. The three attributes used — `OBJECTID`,
+  `name` and `SOURCEID` — are settled by the client and server code and are recorded under
+  _The layer attribute schema_ above.
