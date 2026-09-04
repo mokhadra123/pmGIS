@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="PMGIS">
+  <rect width="32" height="32" rx="7" fill="#1b5583" />
+  <path
+    d="M16 6c-4.42 0-8 3.58-8 8 0 5.6 8 12 8 12s8-6.4 8-12c0-4.42-3.58-8-8-8z"
+    fill="#ffffff"
+  />
+  <circle cx="16" cy="14" r="3.1" fill="#1b5583" />
+</svg>
