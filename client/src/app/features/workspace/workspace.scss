@@ -18,6 +18,10 @@
 }
 
 .list-pane,
+.map-pane {
+  position: relative;
+}
+
 .map-pane,
 .detail-pane {
   min-width: 0;

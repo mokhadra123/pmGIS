@@ -79,4 +79,21 @@ export class MapBridge {
     this.draftLocation.set(null);
     this.pickingLocation.set(false);
   }
+
+  // ----- nearby search, driven by the nearby panel ---------------------------
+
+  // True while the panel has asked the user to click the centre of the search.
+  readonly pickingNearby = signal(false);
+
+  // The point the user clicked. Null until they pick one, or after a reset.
+  readonly nearbyPoint = signal<LatLng | null>(null);
+
+  startNearbyPicking(): void {
+    this.pickingNearby.set(true);
+  }
+
+  clearNearby(): void {
+    this.pickingNearby.set(false);
+    this.nearbyPoint.set(null);
+  }
 }

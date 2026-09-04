@@ -4,13 +4,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter, map, startWith } from 'rxjs';
 
 import { ProjectMap } from '../map/map-view/project-map';
+import { NearbySearch } from '../map/nearby/nearby-search';
 import { ProjectList } from '../projects/project-list/project-list';
 
 // Projects List, map, and a detail pane that appears only when a child route fills it.
 @Component({
   selector: 'app-workspace',
   standalone: true,
-  imports: [RouterOutlet, ProjectList, ProjectMap],
+  imports: [RouterOutlet, ProjectList, ProjectMap, NearbySearch],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './workspace.html',
   styleUrl: './workspace.scss',

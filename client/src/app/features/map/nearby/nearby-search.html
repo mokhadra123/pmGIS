@@ -1,0 +1,67 @@
+<div class="nearby" [class.is-open]="open()">
+  <button
+    type="button"
+    class="btn btn--sm launcher"
+    [class.btn--primary]="open()"
+    [attr.aria-expanded]="open()"
+    (click)="toggle()"
+  >
+    Nearby projects
+  </button>
+
+  @if (open()) {
+    <div class="panel" role="region" aria-label="Nearby projects">
+      <label class="radius">
+        <span>Within</span>
+        <input
+          type="number"
+          min="1"
+          max="500"
+          step="1"
+          [value]="radiusKm()"
+          (change)="setRadius($any($event.target).value)"
+          aria-label="Search radius in kilometres"
+        />
+        <span>km</span>
+      </label>
+
+      @if (bridge.pickingNearby()) {
+        <p class="hint">Click a point on the map to search around it.</p>
+      } @else if (point(); as p) {
+        <p class="hint">
+          Around {{ p.latitude | number: '1.4-4' }}, {{ p.longitude | number: '1.4-4' }}
+          <button type="button" class="link-btn" (click)="pickAgain()">Pick another point</button>
+        </p>
+      }
+
+      @if (loading()) {
+        <p class="state">Searching…</p>
+      } @else if (failure(); as message) {
+        <p class="state state--error">{{ message }}</p>
+      } @else if (isEmpty()) {
+        <p class="state">No projects within {{ radiusKm() }} km. Try a larger radius.</p>
+      } @else if (results().length) {
+        <p class="state">{{ results().length }} nearest, closest first</p>
+        <ul class="results">
+          @for (project of results(); track project.id) {
+            <li>
+              <button type="button" class="result" (click)="goTo(project)">
+                <span class="name">{{ project.name }}</span>
+                <span class="code">{{ project.projectCode }}</span>
+                <span class="distance">{{ project.distanceKm | number: '1.2-2' }} km</span>
+              </button>
+              <button
+                type="button"
+                class="link-btn"
+                [attr.aria-label]="'View ' + project.name"
+                (click)="view(project)"
+              >
+                View
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  }
+</div>

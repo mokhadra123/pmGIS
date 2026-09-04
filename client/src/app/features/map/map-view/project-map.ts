@@ -301,6 +301,15 @@ export class ProjectMap {
       return;
     }
 
+    // While the nearby panel is picking, a click sets the centre of the search.
+    if (this.bridge.pickingNearby()) {
+      event.stopPropagation();
+      const { latitude, longitude } = this.toLatLng(event.mapPoint);
+      this.bridge.nearbyPoint.set({ latitude, longitude });
+      this.bridge.pickingNearby.set(false);
+      return;
+    }
+
     // Otherwise a click on a project point selects the matching row.
     try {
       const hit = await view.hitTest(event as never, { include: [this.projectLayer] });
