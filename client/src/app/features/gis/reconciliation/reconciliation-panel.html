@@ -1,0 +1,95 @@
+<button
+  type="button"
+  class="launcher"
+  [attr.aria-expanded]="open()"
+  (click)="toggle()"
+>
+  Data integrity
+</button>
+
+@if (open()) {
+  <div class="backdrop" (click)="close()"></div>
+
+  <section class="panel" role="dialog" aria-modal="true" aria-label="Data integrity check">
+    <header>
+      <h2>Data integrity</h2>
+      <button type="button" class="icon-btn" aria-label="Close" (click)="close()">&times;</button>
+    </header>
+
+    <p class="lede">
+      Compares the ArcGIS feature layer against the database in both directions. Only features
+      this application owns are checked.
+    </p>
+
+    @if (loading()) {
+      <p class="state">Checking the layer against the database…</p>
+    } @else if (failure(); as message) {
+      <p class="state state--error">{{ message }}</p>
+      <button type="button" class="btn btn--sm" (click)="run()">Try again</button>
+    } @else if (report(); as r) {
+      <p class="verdict" [class.verdict--clean]="r.isClean" [class.verdict--drift]="!r.isClean">
+        {{ r.isClean ? 'No drift found. The two stores agree.' : 'Drift found. Details below.' }}
+      </p>
+
+      <dl class="counts">
+        <div>
+          <dt>Features checked</dt>
+          <dd>{{ r.featuresChecked | number }}</dd>
+        </div>
+        <div>
+          <dt>Projects checked</dt>
+          <dd>{{ r.projectsChecked | number }}</dd>
+        </div>
+      </dl>
+
+      @if (r.projectsChecked === 0) {
+        <p class="note">
+          No project row currently holds an ObjectId, so nothing is linked to the layer yet. Run
+          the backfill (<code>POST /api/gis/backfill-features</code>) to create the missing
+          points; until then every owned feature is reported as an orphan.
+        </p>
+      }
+
+      <h3>Orphan features <span class="count">{{ r.orphanFeatures.length | number }}</span></h3>
+      <p class="hint">Points in the layer that no project row points at.</p>
+      @if (r.orphanFeatures.length) {
+        <ul class="rows">
+          @for (f of r.orphanFeatures.slice(0, sampleSize); track f.objectId) {
+            <li><code>{{ f.objectId }}</code> {{ f.projectCode ?? '—' }}</li>
+          }
+        </ul>
+        @if (r.orphanFeatures.length > sampleSize) {
+          <p class="hint">…and {{ r.orphanFeatures.length - sampleSize | number }} more.</p>
+        }
+      }
+
+      <h3>Orphan project rows <span class="count">{{ r.orphanProjectRows.length }}</span></h3>
+      <p class="hint">Projects whose ObjectId no longer exists in the layer.</p>
+      @if (r.orphanProjectRows.length) {
+        <ul class="rows">
+          @for (row of r.orphanProjectRows.slice(0, sampleSize); track row.projectId) {
+            <li><code>{{ row.objectId }}</code> {{ row.projectCode }}</li>
+          }
+        </ul>
+      }
+
+      <h3>Code mismatches <span class="count">{{ r.codeMismatches.length }}</span></h3>
+      <p class="hint">Linked, but the layer and the database disagree about the project code.</p>
+      @if (r.codeMismatches.length) {
+        <ul class="rows">
+          @for (m of r.codeMismatches.slice(0, sampleSize); track m.objectId) {
+            <li>
+              <code>{{ m.objectId }}</code> database {{ m.databaseCode }} · layer
+              {{ m.layerCode ?? '—' }}
+            </li>
+          }
+        </ul>
+      }
+
+      <footer>
+        <span>Generated {{ r.generatedOn | date: 'medium' }}</span>
+        <button type="button" class="btn btn--sm" (click)="run()">Re-run</button>
+      </footer>
+    }
+  </section>
+}
