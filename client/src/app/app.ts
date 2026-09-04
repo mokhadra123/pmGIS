@@ -7,7 +7,7 @@ import { NotificationHost } from '@shared/notifications/notification-host';
   imports: [RouterOutlet, NotificationHost],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './app.html',
-  styleUrl: './app.scss'
+  styleUrl: './app.scss',
 })
 export class App {
   protected readonly title = signal('client');

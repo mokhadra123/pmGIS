@@ -25,12 +25,7 @@
       <button type="button" class="ghost" [disabled]="busy()" (click)="cancelled.emit()">
         Cancel
       </button>
-      <button
-        type="button"
-        class="danger"
-        [disabled]="!matches() || busy()"
-        (click)="confirm()"
-      >
+      <button type="button" class="danger" [disabled]="!matches() || busy()" (click)="confirm()">
         {{ busy() ? 'Deleting…' : 'Delete' }}
       </button>
     </div>
